@@ -12,9 +12,7 @@ pub struct Args {
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     #[command(about = "Manage a service")]
-    Service {
-        service_name: String
-    },
+    Service { service_name: String },
 
     #[command(about = "Manage the daemon")]
     Daemon {
@@ -23,5 +21,5 @@ pub enum Commands {
 
         #[arg(long, group = "actions")]
         stop: bool,
-    }
+    },
 }
