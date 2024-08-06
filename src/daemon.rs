@@ -5,7 +5,16 @@ use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
-use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+
+use crate::args::Args;
+use crate::config::Config;
 
 pub const LOCKFILE_PATH: &str = "/tmp/nix-service-manager.pid";
 
@@ -14,7 +23,7 @@ pub const LOCKFILE_PATH: &str = "/tmp/nix-service-manager.pid";
 // - Forking the current process to create the daemon process
 // - Beginning execution of the daemon
 // - Exiting the parent process
-pub fn start_daemon() -> Result<()> {
+pub fn start_daemon(args: Args) -> Result<()> {
     let lockfile = Lockfile::create(LOCKFILE_PATH);
     if let Err(lockfile::Error::LockTaken) = lockfile {
         bail!("Daemon is already running!");
@@ -30,7 +39,7 @@ pub fn start_daemon() -> Result<()> {
         }
         Ok(Fork::Child) => {
             eprintln!("Forked child is here");
-            daemon_main()?;
+            daemon_main(args)?;
         }
         Err(e) => bail!(anyhow!("Failed to fork").context(e)),
     }
@@ -38,6 +47,11 @@ pub fn start_daemon() -> Result<()> {
 }
 
 pub fn stop_daemon() -> Result<()> {
+    if !PathBuf::from(LOCKFILE_PATH).exists() {
+        eprintln!("Daemon is not running!");
+        return Ok(());
+    }
+
     let raw = std::fs::read_to_string(LOCKFILE_PATH)?;
     let pid = raw.parse::<i32>()?;
 
@@ -46,19 +60,47 @@ pub fn stop_daemon() -> Result<()> {
     Ok(())
 }
 
-pub fn daemon_main() -> Result<()> {
+pub fn daemon_main(args: Args) -> Result<()> {
     // Setup signal handlers
     let terminate = Arc::new(AtomicBool::new(false));
     signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&terminate))?;
     signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&terminate))?;
 
-    // We need to bind it to a variable so it doesn't get dropped
+    // We need to bind the lockfile to a variable so it doesn't get dropped
     let _lockfile = Lockfile::create(LOCKFILE_PATH)?;
     std::fs::write(LOCKFILE_PATH, format!("{}", std::process::id()))?;
 
+    // Fetch the configuration
+    let config = match args.config {
+        Some(config_path) => Config::load_from(config_path)?,
+        None => Config::default(),
+    };
+    dbg!(&config);
+
+    // Start the services
+    let mut children = vec![];
+    for (name, conf) in config.services.iter() {
+        if !conf.enabled {
+            continue;
+        }
+
+        eprintln!("Starting service {}", name);
+        let child = std::process::Command::new("sh")
+            .current_dir(&conf.base_dir)
+            .arg("-c")
+            .arg(&conf.run_command)
+            .spawn()?;
+        children.push(child);
+    }
+
+    eprintln!("All services have been started");
+
     while !terminate.load(Ordering::Relaxed) {
         std::thread::sleep(std::time::Duration::from_secs(1));
-        eprintln!("Message");
+    }
+
+    for mut child in children {
+        child.kill()?;
     }
 
     eprintln!("Daemon finished");
