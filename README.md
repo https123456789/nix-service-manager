@@ -11,7 +11,7 @@ A daemon that can manage services declaratively using nix.
 
 ## System Requirements
 
-You will need to have the experimental `nix-command` feature turned on. See [the Wiki](https://nixos.wiki/wiki/Flakes) for more info.
+You will need to have the experimental `nix-command` feature turned on. See [the Wiki](https://nixos.wiki/wiki/Nix_command) for more info.
 
 ## Motivation
 
