@@ -1,12 +1,22 @@
 {
+  # Enable debug logs
+  debug = true;
+
+  # Specify a path where all service source files are stored and managed
+  root = ./demo-services-root;
+
   services.a = {
     enabled = true;
+
+    # Use base_dir for services with a source that is local and git_uri for remote services that
+    # can be cloned from a git server
     base_dir = ./src;
-    run_command = "python -m http.server";
+    run_command = "python -m http.server 3000";
   };
+
   services.b = {
     enabled = true;
-    base_dir = ./.;
-    run_command = "python -m http.server 5000";
+    git_uri = "https://github.com/TheWaWaR/simple-http-server.git";
+    run_command = "cargo run -- -i -p 5000 .";
   };
 }

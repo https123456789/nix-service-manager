@@ -13,8 +13,8 @@ use std::{
     },
 };
 
-use crate::args::Args;
-use crate::config::Config;
+use crate::{args::Args, config};
+use crate::{config::Config, sources::ensure_git_source};
 
 pub const LOCKFILE_PATH: &str = "/tmp/nix-service-manager.pid";
 
@@ -75,18 +75,62 @@ pub fn daemon_main(args: Args) -> Result<()> {
         Some(config_path) => Config::load_from(config_path)?,
         None => Config::default(),
     };
-    dbg!(&config);
+    if config::CONFIG.set(config).is_err() {
+        bail!("Failed to set global config");
+    }
+
+    let sources_root = &config::CONFIG
+        .get()
+        .expect("Global config should be initialized")
+        .root;
+    let debug_allowed = match &config::CONFIG
+        .get()
+        .expect("Global config should be initialized")
+        .debug
+    {
+        Some(value) => value.to_owned(),
+        None => false,
+    };
 
     // Start the services
     let mut children = vec![];
-    for (name, conf) in config.services.iter() {
+    for (name, conf) in config::CONFIG
+        .get()
+        .expect("Global config should be initialized")
+        .services
+        .iter()
+    {
         if !conf.enabled {
             continue;
         }
 
-        eprintln!("Starting service {}", name);
+        let cdir = match (&conf.base_dir, &conf.git_uri) {
+            (Some(dir), None) => dir,
+            (None, Some(_)) => &PathBuf::from(sources_root).join(name),
+            (Some(_), Some(_)) => {
+                bail!("Invalid configuration ({name}): base_dir and git_uri are exclusive!")
+            }
+            (None, None) => {
+                bail!("Invalid configuration ({name}): either base_dir or git_uri must be set!")
+            }
+        };
+
+        if debug_allowed {
+            eprintln!("Cdir for service {name}: {cdir:?}");
+        }
+
+        if conf.base_dir.is_none() {
+            ensure_git_source(
+                config::CONFIG
+                    .get()
+                    .expect("Global config should be initialized"),
+                name,
+            )?;
+        }
+
+        eprintln!("Starting service: {}", name);
         let child = std::process::Command::new("sh")
-            .current_dir(&conf.base_dir)
+            .current_dir(cdir)
             .arg("-c")
             .arg(&conf.run_command)
             .spawn()?;

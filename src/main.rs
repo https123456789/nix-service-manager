@@ -1,9 +1,12 @@
+use std::{path::PathBuf, time::Duration};
+
 use anyhow::Result;
 use clap::Parser;
 
 mod args;
 mod config;
 mod daemon;
+mod sources;
 
 use args::{Args, Commands};
 use config::Config;
@@ -21,13 +24,22 @@ fn main() -> Result<()> {
             dbg!(config);
         }
 
-        Commands::Daemon { start, stop } => {
+        Commands::Daemon { start, stop, wait } => {
             if start {
                 start_daemon(args)?;
             }
 
             if stop {
                 stop_daemon()?;
+            }
+
+            if wait.is_some() && wait.unwrap() {
+                // Give the daemon a change to get the lockfile
+                std::thread::sleep(Duration::from_secs(1));
+
+                while PathBuf::from(daemon::LOCKFILE_PATH).exists() {
+                    std::thread::sleep(Duration::from_secs(1));
+                }
             }
         }
         Commands::Service { .. } => todo!(),

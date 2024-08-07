@@ -29,5 +29,8 @@ pub enum Commands {
 
         #[arg(long, group = "actions")]
         stop: bool,
+
+        #[arg(long)]
+        wait: Option<bool>
     },
 }

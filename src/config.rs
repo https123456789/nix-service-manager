@@ -6,12 +6,15 @@ pub static CONFIG: OnceLock<Config> = OnceLock::new();
 
 #[derive(Debug, Default, Deserialize)]
 pub struct Config {
+    pub debug: Option<bool>,
+    pub root: PathBuf,
     pub services: HashMap<String, ConfigService>,
 }
 
 #[derive(Debug, Default, Deserialize, Hash, PartialEq)]
 pub struct ConfigService {
-    pub base_dir: PathBuf,
+    pub base_dir: Option<PathBuf>,
+    pub git_uri: Option<String>,
     pub enabled: bool,
     pub run_command: String,
 }

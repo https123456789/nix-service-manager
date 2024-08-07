@@ -18,7 +18,7 @@ You will need to have the experimental `nix-command` feature turned on. See [the
 You can run the daemon with the example configuration with:
 
 ```
-cargo run -- daemon --config example.nix --start
+cargo run -- --config example.nix daemon --start
 ```
 
 ## Nix Evaluation
