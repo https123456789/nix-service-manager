@@ -7,6 +7,7 @@ use nix::{
 };
 use std::{
     path::PathBuf,
+    process::Child,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -93,6 +94,22 @@ pub fn daemon_main(args: Args) -> Result<()> {
     };
 
     // Start the services
+    let children = start_services(sources_root, debug_allowed)?;
+
+    eprintln!("All services have been started");
+
+    while !terminate.load(Ordering::Relaxed) {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+
+    stop_services(children)?;
+
+    eprintln!("Daemon finished");
+
+    Ok(())
+}
+
+fn start_services(sources_root: &PathBuf, debug_allowed: bool) -> Result<Vec<Child>> {
     let mut children = vec![];
     for (name, conf) in config::CONFIG
         .get()
@@ -137,17 +154,13 @@ pub fn daemon_main(args: Args) -> Result<()> {
         children.push(child);
     }
 
-    eprintln!("All services have been started");
+    Ok(children)
+}
 
-    while !terminate.load(Ordering::Relaxed) {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
-
+fn stop_services(children: Vec<Child>) -> Result<()> {
     for mut child in children {
         child.kill()?;
     }
-
-    eprintln!("Daemon finished");
 
     Ok(())
 }

@@ -31,6 +31,6 @@ pub enum Commands {
         stop: bool,
 
         #[arg(long)]
-        wait: Option<bool>
+        wait: Option<bool>,
     },
 }

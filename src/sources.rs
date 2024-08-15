@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use crate::config::Config;
 use anyhow::{anyhow, Result};
 use git2::Repository;
+use std::path::PathBuf;
 
 pub fn ensure_git_source(config: &Config, name: &str) -> Result<()> {
     let dir = PathBuf::from(&config.root).join(name);
