@@ -1,20 +1,26 @@
 use anyhow::{anyhow, bail, Result};
 use fork::{fork, Fork};
+use git2::Repository;
 use lockfile::Lockfile;
 use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Child,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::Instant,
 };
 
-use crate::{args::Args, config};
+use crate::{
+    args::Args,
+    config::{self, ConfigService},
+    sources::check_git_source_update,
+};
 use crate::{config::Config, sources::ensure_git_source};
 
 pub const LOCKFILE_PATH: &str = "/tmp/nix-service-manager.pid";
@@ -94,12 +100,55 @@ pub fn daemon_main(args: Args) -> Result<()> {
     };
 
     // Start the services
-    let children = start_services(sources_root, debug_allowed)?;
+    let mut children = start_services(sources_root, debug_allowed)?;
 
     eprintln!("All services have been started");
 
+    let mut start = Instant::now();
+
     while !terminate.load(Ordering::Relaxed) {
         std::thread::sleep(std::time::Duration::from_secs(1));
+
+        if start.elapsed().as_secs() > 59 {
+            let services = &config::CONFIG
+                .get()
+                .expect("Global config should be initialized")
+                .services;
+
+            for (i, (name, service)) in services.iter().enumerate() {
+                if service.git_uri.is_none() {
+                    continue;
+                }
+
+                let check = match check_git_source_update(name, service, sources_root) {
+                    Ok(value) => value,
+                    Err(e) => {
+                        eprintln!("Error: {e:?}");
+                        continue;
+                    }
+                };
+
+                if check {
+                    eprintln!("Updating git source for {}", name);
+                    let new_child = match update_git_service(
+                        name,
+                        service,
+                        sources_root,
+                        &mut children[i],
+                    ) {
+                        Ok(child) => child,
+                        Err(e) => {
+                            eprintln!("Git source update failed: {e:?}");
+                            children.remove(i);
+                            continue
+                        },
+                    };
+                    children[i] = new_child;
+                }
+            }
+
+            start = Instant::now();
+        }
     }
 
     stop_services(children)?;
@@ -163,4 +212,37 @@ fn stop_services(children: Vec<Child>) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Update the source for a git service
+///
+/// Rather than worry about git merge problems, this will just delete the directory and clone again
+fn update_git_service(
+    name: &str,
+    service: &ConfigService,
+    sources_root: &Path,
+    service_proc: &mut Child,
+) -> Result<Child> {
+    let source_path = sources_root.join(format!("{}-update-tmp", name));
+
+    eprintln!("[{}] | Cloning git repo to temp dir", name);
+
+    Repository::clone(service.git_uri.as_ref().unwrap(), &source_path)?;
+    
+    eprintln!("[{}] | Done with clone; stopping service", name);
+
+    service_proc.kill()?;
+
+    std::fs::remove_dir_all(sources_root.join(name))?;
+    std::fs::rename(source_path, sources_root.join(name))?;
+    
+    eprintln!("[{}] | New source is all ready; restarting service", name);
+
+    let child = std::process::Command::new("sh")
+        .current_dir(sources_root.join(name))
+        .arg("-c")
+        .arg(&service.run_command)
+        .spawn()?;
+
+    Ok(child)
 }
