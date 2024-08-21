@@ -8,13 +8,13 @@ use nix::{
 };
 use std::{
     path::{Path, PathBuf},
-    process::Child,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
     time::Instant,
 };
+use command_group::{CommandGroup, GroupChild};
 
 use crate::{
     args::{Args, Commands},
@@ -169,7 +169,7 @@ pub fn daemon_main(args: &Args) -> Result<()> {
     Ok(())
 }
 
-fn start_services(sources_root: &PathBuf, debug_allowed: bool) -> Result<Vec<Child>> {
+fn start_services(sources_root: &PathBuf, debug_allowed: bool) -> Result<Vec<GroupChild>> {
     let mut children = vec![];
     for (name, conf) in config::CONFIG
         .get()
@@ -210,14 +210,14 @@ fn start_services(sources_root: &PathBuf, debug_allowed: bool) -> Result<Vec<Chi
             .current_dir(cdir)
             .arg("-c")
             .arg(&conf.run_command)
-            .spawn()?;
+            .group_spawn()?;
         children.push(child);
     }
 
     Ok(children)
 }
 
-fn stop_services(children: Vec<Child>) -> Result<()> {
+fn stop_services(children: Vec<GroupChild>) -> Result<()> {
     for mut child in children {
         child.kill()?;
     }
@@ -232,8 +232,8 @@ fn update_git_service(
     name: &str,
     service: &ConfigService,
     sources_root: &Path,
-    service_proc: &mut Child,
-) -> Result<Child> {
+    service_proc: &mut GroupChild,
+) -> Result<GroupChild> {
     let source_path = sources_root.join(format!("{}-update-tmp", name));
 
     eprintln!("[{}] | Cloning git repo to temp dir", name);
@@ -253,7 +253,7 @@ fn update_git_service(
         .current_dir(sources_root.join(name))
         .arg("-c")
         .arg(&service.run_command)
-        .spawn()?;
+        .group_spawn()?;
 
     Ok(child)
 }
