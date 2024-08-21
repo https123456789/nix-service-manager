@@ -31,6 +31,9 @@ pub enum Commands {
         stop: bool,
 
         #[arg(long)]
+        no_fork: Option<bool>,
+
+        #[arg(long)]
         wait: Option<bool>,
     },
 }

@@ -17,7 +17,7 @@ use std::{
 };
 
 use crate::{
-    args::Args,
+    args::{Args, Commands},
     config::{self, ConfigService},
     sources::check_git_source_update,
 };
@@ -39,6 +39,17 @@ pub fn start_daemon(args: Args) -> Result<()> {
     // Explicitly drop the lockfile so it won't exist when we start the daemon
     drop(lockfile);
 
+    let no_forking: bool = match args.command {
+        Commands::Daemon { no_fork, .. } => no_fork.unwrap_or_default(),
+        _ => false,
+    };
+
+    if no_forking {
+        eprintln!("Forking is disabled, jumping into daemon main...");
+        daemon_main(&args)?;
+        return Ok(());
+    }
+
     eprintln!("Forking...");
     match fork() {
         Ok(Fork::Parent(child)) => {
@@ -46,7 +57,7 @@ pub fn start_daemon(args: Args) -> Result<()> {
         }
         Ok(Fork::Child) => {
             eprintln!("Forked child is here");
-            daemon_main(args)?;
+            daemon_main(&args)?;
         }
         Err(e) => bail!(anyhow!("Failed to fork").context(e)),
     }
@@ -67,7 +78,7 @@ pub fn stop_daemon() -> Result<()> {
     Ok(())
 }
 
-pub fn daemon_main(args: Args) -> Result<()> {
+pub fn daemon_main(args: &Args) -> Result<()> {
     // Setup signal handlers
     let terminate = Arc::new(AtomicBool::new(false));
     signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&terminate))?;
@@ -78,8 +89,8 @@ pub fn daemon_main(args: Args) -> Result<()> {
     std::fs::write(LOCKFILE_PATH, format!("{}", std::process::id()))?;
 
     // Fetch the configuration
-    let config = match args.config {
-        Some(config_path) => Config::load_from(config_path)?,
+    let config = match &args.config {
+        Some(config_path) => Config::load_from(config_path.to_owned())?,
         None => Config::default(),
     };
     if config::CONFIG.set(config).is_err() {
