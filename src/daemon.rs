@@ -206,11 +206,17 @@ fn start_services(sources_root: &PathBuf, debug_allowed: bool) -> Result<Vec<Gro
         }
 
         eprintln!("Starting service: {}", name);
-        let child = std::process::Command::new("sh")
-            .current_dir(cdir)
-            .arg("-c")
-            .arg(&conf.run_command)
-            .group_spawn()?;
+        let mut command = std::process::Command::new("sh");
+        command.current_dir(cdir);
+        command.arg("-c");
+        command.arg(&conf.run_command);
+
+        let env_conf = conf.env.clone().unwrap_or_default();
+        for key in env_conf.keys() {
+            command.env(key, env_conf.get(key).ok_or(anyhow!("Missing env key!!"))?);
+        }
+
+        let child = command.group_spawn()?;
         children.push(child);
     }
 

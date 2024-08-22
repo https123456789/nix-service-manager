@@ -11,10 +11,11 @@ pub struct Config {
     pub services: HashMap<String, ConfigService>,
 }
 
-#[derive(Debug, Default, Deserialize, Hash, PartialEq)]
+#[derive(Debug, Default, Deserialize, PartialEq)]
 pub struct ConfigService {
     pub base_dir: Option<PathBuf>,
     pub git_uri: Option<String>,
+    pub env: Option<HashMap<String, String>>,
     pub enabled: bool,
     pub run_command: String,
 }
