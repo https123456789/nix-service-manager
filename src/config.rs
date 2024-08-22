@@ -16,6 +16,7 @@ pub struct ConfigService {
     pub base_dir: Option<PathBuf>,
     pub git_uri: Option<String>,
     pub env: Option<HashMap<String, String>>,
+    pub ssh_key_file: Option<String>,
     pub enabled: bool,
     pub run_command: String,
 }

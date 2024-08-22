@@ -14,24 +14,28 @@ pub fn ensure_git_source(config: &Config, name: &str) -> Result<()> {
 
     if Repository::open(&dir).is_err() {
         std::fs::create_dir_all(&dir)?;
-        let uri = config
+        let conf = config
             .services
             .get(name)
-            .ok_or(anyhow!("Failed to get service {name} from config"))?
-            .git_uri
-            .as_ref()
-            .unwrap()
-            .to_string();
+            .ok_or(anyhow!("Failed to get service {name} from config"))?;
+        let uri = conf.git_uri.as_ref().unwrap().to_string();
 
         let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            Cred::ssh_key(
-                username_from_url.unwrap(),
-                None,
-                Path::new(&format!("{}/.ssh/id_ed25519", env::var("HOME").unwrap())),
-                None,
-            )
-        });
+
+        if let Some(ssh_key_file) = &conf.ssh_key_file {
+            callbacks.credentials(|_url, username_from_url, _allowed_types| {
+                Cred::ssh_key(
+                    username_from_url.unwrap(),
+                    None,
+                    Path::new(&format!(
+                        "{}/.ssh/{}",
+                        env::var("HOME").unwrap(),
+                        ssh_key_file.to_owned()
+                    )),
+                    None,
+                )
+            });
+        }
 
         let mut fetch_options = FetchOptions::new();
         fetch_options.remote_callbacks(callbacks);
