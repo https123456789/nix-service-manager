@@ -25,7 +25,7 @@ pub fn ensure_git_source(config: &Config, name: &str) -> Result<()> {
         if let Some(ssh_key_file) = &conf.ssh_key_file {
             callbacks.credentials(|_url, username_from_url, _allowed_types| {
                 Cred::ssh_key(
-                    username_from_url.unwrap(),
+                    username_from_url.unwrap_or("git"),
                     None,
                     Path::new(&format!(
                         "{}/.ssh/{}",
