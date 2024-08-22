@@ -24,7 +24,9 @@ fn main() -> Result<()> {
             dbg!(config);
         }
 
-        Commands::Daemon { start, stop, wait, .. } => {
+        Commands::Daemon {
+            start, stop, wait, ..
+        } => {
             if start {
                 start_daemon(args)?;
             }

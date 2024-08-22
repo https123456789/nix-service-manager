@@ -1,10 +1,13 @@
 use crate::config::{Config, ConfigService};
 use anyhow::{anyhow, Result};
+use git2::build::RepoBuilder;
 use git2::{
-    AutotagOption, FetchOptions, RemoteCallbacks, RemoteUpdateFlags, Repository, StatusOptions,
+    AutotagOption, Cred, FetchOptions, RemoteCallbacks, RemoteUpdateFlags, Repository,
+    StatusOptions,
 };
+use std::env;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub fn ensure_git_source(config: &Config, name: &str) -> Result<()> {
     let dir = PathBuf::from(&config.root).join(name);
@@ -19,7 +22,23 @@ pub fn ensure_git_source(config: &Config, name: &str) -> Result<()> {
             .as_ref()
             .unwrap()
             .to_string();
-        Repository::clone(&uri, dir)?;
+
+        let mut callbacks = RemoteCallbacks::new();
+        callbacks.credentials(|_url, username_from_url, _allowed_types| {
+            Cred::ssh_key(
+                username_from_url.unwrap(),
+                None,
+                Path::new(&format!("{}/.ssh/id_ed25519", env::var("HOME").unwrap())),
+                None,
+            )
+        });
+
+        let mut fetch_options = FetchOptions::new();
+        fetch_options.remote_callbacks(callbacks);
+
+        let mut builder = RepoBuilder::new();
+        builder.fetch_options(fetch_options);
+        builder.clone(&uri, &dir)?;
     }
 
     Ok(())

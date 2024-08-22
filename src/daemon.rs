@@ -1,4 +1,5 @@
 use anyhow::{anyhow, bail, Result};
+use command_group::{CommandGroup, GroupChild};
 use fork::{fork, Fork};
 use git2::Repository;
 use lockfile::Lockfile;
@@ -14,7 +15,6 @@ use std::{
     },
     time::Instant,
 };
-use command_group::{CommandGroup, GroupChild};
 
 use crate::{
     args::{Args, Commands},
@@ -141,19 +141,15 @@ pub fn daemon_main(args: &Args) -> Result<()> {
 
                 if check {
                     eprintln!("Updating git source for {}", name);
-                    let new_child = match update_git_service(
-                        name,
-                        service,
-                        sources_root,
-                        &mut children[i],
-                    ) {
-                        Ok(child) => child,
-                        Err(e) => {
-                            eprintln!("Git source update failed: {e:?}");
-                            children.remove(i);
-                            continue
-                        },
-                    };
+                    let new_child =
+                        match update_git_service(name, service, sources_root, &mut children[i]) {
+                            Ok(child) => child,
+                            Err(e) => {
+                                eprintln!("Git source update failed: {e:?}");
+                                children.remove(i);
+                                continue;
+                            }
+                        };
                     children[i] = new_child;
                 }
             }
@@ -245,14 +241,14 @@ fn update_git_service(
     eprintln!("[{}] | Cloning git repo to temp dir", name);
 
     Repository::clone(service.git_uri.as_ref().unwrap(), &source_path)?;
-    
+
     eprintln!("[{}] | Done with clone; stopping service", name);
 
     service_proc.kill()?;
 
     std::fs::remove_dir_all(sources_root.join(name))?;
     std::fs::rename(source_path, sources_root.join(name))?;
-    
+
     eprintln!("[{}] | New source is all ready; restarting service", name);
 
     let child = std::process::Command::new("sh")
