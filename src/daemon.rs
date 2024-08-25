@@ -193,6 +193,10 @@ fn start_services(sources_root: &PathBuf, debug_allowed: bool) -> Result<Vec<Gro
         }
 
         if conf.base_dir.is_none() {
+            if debug_allowed {
+                eprintln!("Ensuring git source {name}");
+            }
+
             ensure_git_source(
                 config::CONFIG
                     .get()
@@ -212,6 +216,9 @@ fn start_services(sources_root: &PathBuf, debug_allowed: bool) -> Result<Vec<Gro
             command.env(key, env_conf.get(key).ok_or(anyhow!("Missing env key!!"))?);
         }
 
+        if debug_allowed {
+            eprintln!("Spawning process for {name}");
+        }
         let child = command.group_spawn()?;
         children.push(child);
     }
