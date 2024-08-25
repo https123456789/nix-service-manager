@@ -58,6 +58,21 @@ pub fn check_git_source_update(
     let mut cb = RemoteCallbacks::new();
     let mut remote = repo.find_remote("origin")?;
 
+    if let Some(ssh_key_file) = &service.ssh_key_file {
+        cb.credentials(|_url, username_from_url, _allowed_types| {
+            Cred::ssh_key(
+                username_from_url.unwrap_or("git"),
+                None,
+                Path::new(&format!(
+                    "{}/.ssh/{}",
+                    env::var("HOME").unwrap(),
+                    ssh_key_file.to_owned()
+                )),
+                None,
+            )
+        });
+    }
+
     // Fetch
     let mut fetch_options = FetchOptions::new();
     fetch_options.remote_callbacks(cb);
