@@ -211,6 +211,9 @@ fn start_services(sources_root: &PathBuf, debug_allowed: bool) -> Result<Vec<Gro
         command.arg("-c");
         command.arg(&conf.run_command);
 
+        // Explicity make the process inherit the PATH env var to resolve issues on NixOS
+        command.env("PATH", std::env::var("PATH").unwrap_or_default());
+
         let env_conf = conf.env.clone().unwrap_or_default();
         for key in env_conf.keys() {
             command.env(key, env_conf.get(key).ok_or(anyhow!("Missing env key!!"))?);
