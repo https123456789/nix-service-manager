@@ -2,11 +2,14 @@
 
 A daemon that can manage services declaratively using nix.
 
+> [!IMPORTANT]
+> This project is still in heavy development. Don't expect stability from it.
+
 ## Project Goals
 
-- [ ] Declarative service configuration with Nix.
-- [ ] Automatic service restart when the system reboots.
-- [ ] Continuous Deployment from any git repository (not just GitHub).
+- [X] Declarative service configuration with Nix.
+- [X] Automatic updates from any git respository (not just GitHub).
+- [ ] Manual service updates/configuration
 - [ ] Simple to install, setup, and use
 
 ## System Requirements
