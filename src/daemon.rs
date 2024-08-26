@@ -8,12 +8,10 @@ use nix::{
     unistd::Pid,
 };
 use std::{
-    path::{Path, PathBuf},
-    sync::{
+    path::{Path, PathBuf}, sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
-    },
-    time::Instant,
+    }, time::Instant
 };
 
 use crate::{
@@ -205,11 +203,16 @@ fn start_services(sources_root: &PathBuf, debug_allowed: bool) -> Result<Vec<Gro
             )?;
         }
 
+        let (cmd, args) = conf
+            .run_command
+            .split_once(" ")
+            .ok_or(anyhow!("Failed to parse command"))?;
+        let split_args = shell_words::split(args)?;
+
         eprintln!("Starting service: {}", name);
-        let mut command = std::process::Command::new("sh");
+        let mut command = std::process::Command::new(cmd);
         command.current_dir(cdir);
-        command.arg("-c");
-        command.arg(&conf.run_command);
+        command.args(split_args);
 
         // Explicity make the process inherit the PATH env var to resolve issues on NixOS
         command.env("PATH", std::env::var("PATH").unwrap_or_default());
