@@ -129,9 +129,7 @@ pub fn daemon_main(args: &Args) -> Result<()> {
                     continue;
                 }
 
-                if debug_enabled {
-                    eprintln!("Checking for git source updates");
-                }
+                eprintln!("Checking for git source updates");
                 let check = match check_git_source_update(name, service, sources_root) {
                     Ok(value) => value,
                     Err(e) => {
