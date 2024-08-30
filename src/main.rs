@@ -7,6 +7,7 @@ mod args;
 mod config;
 mod daemon;
 mod sources;
+mod webhooks;
 
 use args::{Args, Commands};
 use config::Config;

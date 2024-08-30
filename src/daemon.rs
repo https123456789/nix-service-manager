@@ -8,20 +8,26 @@ use nix::{
     unistd::Pid,
 };
 use std::{
-    path::{Path, PathBuf}, sync::{
+    path::{Path, PathBuf},
+    sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
-    }, time::Instant
+        Arc, LazyLock,
+    },
+    thread,
+    time::Instant,
 };
 
 use crate::{
     args::{Args, Commands},
     config::{self, ConfigService},
     sources::check_git_source_update,
+    webhooks::webhook_server_main,
 };
 use crate::{config::Config, sources::ensure_git_source};
 
 pub const LOCKFILE_PATH: &str = "/tmp/nix-service-manager.pid";
+pub static TERMINATE: LazyLock<Arc<AtomicBool>> =
+    LazyLock::new(|| Arc::new(AtomicBool::new(false)));
 
 // Starting the daemon process requires:
 // - Ensuring that another daemon isn't running
@@ -78,9 +84,8 @@ pub fn stop_daemon() -> Result<()> {
 
 pub fn daemon_main(args: &Args) -> Result<()> {
     // Setup signal handlers
-    let terminate = Arc::new(AtomicBool::new(false));
-    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&terminate))?;
-    signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&terminate))?;
+    signal_hook::flag::register(signal_hook::consts::SIGTERM, TERMINATE.clone())?;
+    signal_hook::flag::register(signal_hook::consts::SIGINT, TERMINATE.clone())?;
 
     // We need to bind the lockfile to a variable so it doesn't get dropped
     let _lockfile = Lockfile::create(LOCKFILE_PATH)?;
@@ -113,9 +118,12 @@ pub fn daemon_main(args: &Args) -> Result<()> {
 
     eprintln!("All services have been started");
 
+    // Start the webhook server
+    let webhook_server = thread::spawn(|| -> Result<()> { webhook_server_main(TERMINATE.clone()) });
+
     let mut start = Instant::now();
 
-    while !terminate.load(Ordering::Relaxed) {
+    while !TERMINATE.load(Ordering::Relaxed) {
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         if start.elapsed().as_secs() > 59 {
@@ -158,6 +166,12 @@ pub fn daemon_main(args: &Args) -> Result<()> {
     }
 
     stop_services(children)?;
+
+    let webhook_result = webhook_server.join();
+
+    if webhook_result.is_err() {
+        eprintln!("Webhook ended with an error: {:?}", webhook_result.err());
+    }
 
     eprintln!("Daemon finished");
 
